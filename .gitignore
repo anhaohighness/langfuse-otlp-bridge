@@ -1,0 +1,14 @@
+# 密钥与环境配置绝不入库
+.env
+*.env
+!m1/bridge.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store

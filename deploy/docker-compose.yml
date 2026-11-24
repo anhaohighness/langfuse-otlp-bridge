@@ -1,0 +1,31 @@
+# 桥接层本地/单机部署：M1 与 M2 互斥，用 profile 二选一（都占用 4318）。
+#   cp m1/bridge.env.example .env   # 填写后端点与鉴权
+#   ./deploy/build.sh               # 独立发包（冒烟 + 构建镜像）
+#   BRIDGE_VERSION=0.1.0 docker compose --profile m1 up -d   # M1 透传（临时形态）
+#   BRIDGE_VERSION=0.1.0 docker compose --profile m2 up -d   # M2 Collector（目标形态）
+# 切换形态不需要设备发版；生产回滚在 APIM 关闭 Langfuse 通道即可。
+# 环境变量同 m1/bridge.env.example；M2 必须提供 LANGFUSE_AUTHORIZATION。
+
+services:
+  bridge-m1:
+    profiles: ["m1"]
+    image: suunto-langfuse-bridge-m1:${BRIDGE_VERSION:-dev}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.m1
+    env_file: ../.env
+    ports:
+      - "4318:4318"
+    restart: unless-stopped
+
+  bridge-m2:
+    profiles: ["m2"]
+    image: suunto-langfuse-bridge-m2:${BRIDGE_VERSION:-dev}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.collector
+    env_file: ../.env
+    ports:
+      - "4318:4318"
+      - "13133:13133"
+    restart: unless-stopped

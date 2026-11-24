@@ -1,0 +1,15 @@
+# M1 透传转发服务镜像（临时形态，决策 D9；M2 起用 Dockerfile.collector）。
+# 仅标准库，无依赖安装层；发布前把基础镜像钉到实测版本。
+FROM python:3.13-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+COPY m1/forwarder.py ./
+
+RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --create-home app
+USER app
+
+EXPOSE 4318
+CMD ["python", "forwarder.py"]

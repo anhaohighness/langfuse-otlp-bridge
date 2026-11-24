@@ -1,0 +1,11 @@
+# M2 目标形态：OpenTelemetry Collector contrib + 参考配置（决策 D9）。
+# 发布前把 latest 钉到 dev 区域实测通过的发行版版本（OTTL 语句尚未在目标版本执行过）。
+FROM otel/opentelemetry-collector-contrib:latest
+
+COPY config/collector-langfuse.yaml /etc/otelcol-contrib/config.yaml
+
+# 4318: OTLP/HTTP（protobuf 与 JSON 同一端点）；13133: health_check。
+EXPOSE 4318 13133
+
+# 镜像默认 entrypoint 即读取 /etc/otelcol-contrib/config.yaml；
+# LANGFUSE_TRACES_ENDPOINT 与 LANGFUSE_AUTHORIZATION 由部署系统注入，不打进镜像。

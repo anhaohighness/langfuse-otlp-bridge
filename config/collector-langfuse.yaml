@@ -1,0 +1,127 @@
+# Langfuse 桥接层参考配置（OpenTelemetry Collector contrib 发行版）
+#
+# 版本：2026-11-24，取代 02_2026-11-11_… 与 06_2026-11-18_… 中的草稿。
+# 状态：参考配置。语句按 transform processor 的 context/statements 写法编写，
+#       未在目标发行版上执行过。上线前先在 dev 区域用 probes/otlp-probe.sh
+#       和一条真实回合各跑一次，再按最终交付方案 index.html 第 07 节验收。
+#
+# 相对旧稿的修正：
+#   1. R4 只作用于 suunto.usage.scope == "turn_total" 的 span。旧稿按“所有根 span”
+#      删除用量，会误删 memory.extract（它也是根 span，且带自己的用量）。
+#   2. 删除了“从 span 属性里删除 Authorization 等请求头”的语句：请求头不是 span
+#      属性，App 凭据由 APIM 在入站时剥离。
+#   3. 出口压缩默认关闭，确认目标实例接受 gzip 后再打开。
+#   4. 新增 R5 取消分级；release 改为可选 R7（service.version 已经自动成为 Langfuse 的
+#      version 字段，release 只读 langfuse.release）。
+#
+# 本文件不含任何真实密钥。Authorization 与端点由部署系统以环境变量注入：
+#   LANGFUSE_TRACES_ENDPOINT  例：https://<langfuse-host>/api/public/otel/v1/traces
+#   LANGFUSE_AUTHORIZATION    Basic base64(publicKey:secretKey)
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  # 可选：要求 APIM 转发时携带内部令牌，桥接层不直接暴露在公网。
+  # bearertokenauth/apim:
+  #   token: "${env:BRIDGE_INBOUND_TOKEN}"
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        # 默认路径 /v1/traces。Android/JVM 发 application/x-protobuf，iOS 发
+        # application/json，同一端点都收。设备不发 gRPC，因此不开 grpc 协议。
+        # auth:
+        #   authenticator: bearertokenauth/apim
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  transform/langfuse:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # ── R1 观测类型（必做）──────────────────────────────────────
+          # 根 chat_turn 与所有步骤都发 invoke_workflow，Langfuse 类型表里没有这个值，
+          # 不写会退化成普通 span。先全部写成 chain，再把 coach.run 改成 agent。
+          - set(attributes["langfuse.observation.type"], "chain") where attributes["gen_ai.operation.name"] == "invoke_workflow"
+          - set(attributes["langfuse.observation.type"], "agent") where name == "coach.run"
+
+          # ── R3 标签（应做）──────────────────────────────────────────
+          # 设备在每个 span 上发 suunto.trace.tags（字符串数组）。
+          - set(attributes["langfuse.trace.tags"], attributes["suunto.trace.tags"]) where attributes["suunto.trace.tags"] != nil
+
+          # ── R4 整轮用量去重（必做，前提：宿主已实现 ProviderRequestTraceBridge，见决策 D1）──
+          # 只处理整轮汇总（turn_total）。先把数值搬进可筛选 metadata，再删除标准用量键，
+          # token 与成本只以请求级 generation 为准。未实现 D1 时不要启用这一组语句，
+          # 否则整轮 token 会完全消失。
+          - set(attributes["langfuse.observation.metadata.turn_total_input_tokens"], attributes["gen_ai.usage.input_tokens"]) where attributes["suunto.usage.scope"] == "turn_total" and attributes["gen_ai.usage.input_tokens"] != nil
+          - set(attributes["langfuse.observation.metadata.turn_total_output_tokens"], attributes["gen_ai.usage.output_tokens"]) where attributes["suunto.usage.scope"] == "turn_total" and attributes["gen_ai.usage.output_tokens"] != nil
+          - set(attributes["langfuse.observation.metadata.turn_total_cached_input_tokens"], attributes["gen_ai.usage.cache_read.input_tokens"]) where attributes["suunto.usage.scope"] == "turn_total" and attributes["gen_ai.usage.cache_read.input_tokens"] != nil
+          - delete_matching_keys(attributes, "^gen_ai\\.usage\\.") where attributes["suunto.usage.scope"] == "turn_total"
+          # suunto.usage.*（scope、estimated_cost_usd、llm_calls、tool_calls）保留，作为审计口径。
+
+          # ── R5 取消分级（可选）──────────────────────────────────────
+          - set(attributes["langfuse.observation.level"], "WARNING") where attributes["error.type"] == "cancelled"
+
+          # ── R6 循环与阶段可筛选（应做，依赖含 G2/G3 的 SDK 版本）────────
+          # 未映射的属性会落进 metadata.attributes，能看不能筛；搬到顶层 metadata 才能筛选。
+          - set(attributes["langfuse.observation.metadata.loop_strategy"], attributes["suunto.agent.loop.strategy"]) where attributes["suunto.agent.loop.strategy"] != nil
+          - set(attributes["langfuse.observation.metadata.loop_exit"], attributes["suunto.agent.loop.exit"]) where attributes["suunto.agent.loop.exit"] != nil
+          - set(attributes["langfuse.observation.metadata.loop_tool_rounds"], attributes["suunto.agent.loop.tool_rounds"]) where attributes["suunto.agent.loop.tool_rounds"] != nil
+          - set(attributes["langfuse.observation.metadata.loop_reused_tool_results"], attributes["suunto.agent.loop.reused_tool_results"]) where attributes["suunto.agent.loop.reused_tool_results"] != nil
+          - set(attributes["langfuse.observation.metadata.request_phase"], attributes["suunto.request.phase"]) where attributes["suunto.request.phase"] != nil
+
+          # ── R7 release（可选）──────────────────────────────────────
+          # - set(attributes["langfuse.release"], resource.attributes["service.version"]) where resource.attributes["service.version"] != nil
+
+          # ── R8 内容兜底（按需：只在目标版本实测不渲染消息数组时启用）──
+          # - set(attributes["langfuse.observation.input"], attributes["gen_ai.input.messages"]) where attributes["gen_ai.input.messages"] != nil and attributes["langfuse.observation.input"] == nil
+          # - set(attributes["langfuse.observation.output"], attributes["gen_ai.output.messages"]) where attributes["gen_ai.output.messages"] != nil and attributes["langfuse.observation.output"] == nil
+
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+
+exporters:
+  otlphttp/langfuse:
+    # 填完整 traces 端点，不依赖导出器自动追加路径。
+    traces_endpoint: "${env:LANGFUSE_TRACES_ENDPOINT}"
+    headers:
+      Authorization: "${env:LANGFUSE_AUTHORIZATION}"
+      # 不带此头时，直连摄取最多延迟约 10 分钟；自建实例按版本确认是否支持。
+      x-langfuse-ingestion-version: "4"
+    # 两种入站编码在此统一为 protobuf 发出。
+    encoding: proto
+    compression: none
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 2s
+      max_interval: 30s
+      max_elapsed_time: 120s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 5000
+
+  # 二期若同时投递 Braintrust，在这里再加一个 exporter，receiver 不用改。
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/langfuse, batch]
+      exporters: [otlphttp/langfuse]
+  telemetry:
+    logs:
+      # 只记录计数与错误码，不把 trace 载荷打进日志。
+      level: info
+    metrics:
+      level: detailed
