@@ -1,0 +1,7 @@
+# 本仓库在 WSL/Linux 构建与运行，统一 LF，防止 autocrlf 把脚本转成 CRLF
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+Dockerfile.* text eol=lf
