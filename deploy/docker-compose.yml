@@ -9,7 +9,7 @@
 services:
   bridge-m1:
     profiles: ["m1"]
-    image: suunto-langfuse-bridge-m1:${BRIDGE_VERSION:-dev}
+    image: langfuse-otlp-bridge-m1:${BRIDGE_VERSION:-dev}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.m1
@@ -20,7 +20,7 @@ services:
 
   bridge-m2:
     profiles: ["m2"]
-    image: suunto-langfuse-bridge-m2:${BRIDGE_VERSION:-dev}
+    image: langfuse-otlp-bridge-m2:${BRIDGE_VERSION:-dev}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.collector

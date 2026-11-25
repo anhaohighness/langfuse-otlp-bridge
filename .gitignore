@@ -3,6 +3,9 @@
 *.env
 !m1/bridge.env.example
 
+# 本机路径与私有上下文不入库
+LOCAL.md
+
 # Python
 __pycache__/
 *.py[cod]

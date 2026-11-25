@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 独立发包脚本：只构建本仓库的 M1/M2 镜像，与 Suunto-Agent 的 Jenkins/release.py 无关。
+# 独立发包脚本：只构建本仓库的 M1/M2 镜像，与云端业务的整栈发布流水线无关。
 #
 # 用法：
 #   ./deploy/build.sh                              # 冒烟 + 构建两个本地镜像
@@ -7,7 +7,7 @@
 #   VERSION=0.2.0 ./deploy/build.sh                # 覆盖 VERSION 文件里的版本
 #   SKIP_SMOKE=1 ./deploy/build.sh                 # 跳过冒烟（不建议）
 #
-# 产物：suunto-langfuse-bridge-m1:<version> 与 suunto-langfuse-bridge-m2:<version>。
+# 产物：langfuse-otlp-bridge-m1:<version> 与 langfuse-otlp-bridge-m2:<version>。
 # 部署侧用 deploy/docker-compose.yml（BRIDGE_VERSION 对齐同一版本）。
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -22,7 +22,7 @@ fi
 for spec in "m1:deploy/Dockerfile.m1" "m2:deploy/Dockerfile.collector"; do
   name="${spec%%:*}"
   dockerfile="${spec#*:}"
-  image="suunto-langfuse-bridge-${name}:${VERSION}"
+  image="langfuse-otlp-bridge-${name}:${VERSION}"
   echo "→ build ${image}"
   docker build -f "$dockerfile" -t "$image" .
   if [[ -n "${REGISTRY:-}" ]]; then

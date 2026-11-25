@@ -125,7 +125,7 @@ def forward(cfg: Config, body: bytes, content_type: str, content_encoding: str |
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "SuuntoLangfuseBridgeM1/0.1"
+    server_version = "LangfuseOtlpBridgeM1/0.1"
     cfg: Config
     stats: Stats
 

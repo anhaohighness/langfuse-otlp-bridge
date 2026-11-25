@@ -1,7 +1,7 @@
 # 仓库开发约束
 
 本仓库是 Langfuse OTLP 桥接层（《Langfuse 接入 · 最终交付方案》2026-11-24 的"范围 B"），
-独立仓库、单独发包，与 Suunto-Agent（云端业务服务）和 suunto-ai-sdk（设备侧 SDK）零代码共享。
+独立仓库、单独发包，与云端业务服务、设备侧 SDK 零代码共享。
 
 AGENTS.md 与 CLAUDE.md 的全部内容必须完全一致。背景、验证记录与待办见 CONTEXT.md。
 
@@ -23,10 +23,10 @@ AGENTS.md 与 CLAUDE.md 的全部内容必须完全一致。背景、验证记�
 
   - M1：`m1/forwarder.py` 透传（临时形态）；M2：OpenTelemetry Collector（`config/collector-langfuse.yaml`，目标形态）。
   - 独立发包：`./deploy/build.sh`（冒烟闸门 + M1/M2 镜像）；`REGISTRY=...` 时推送；版本见 `VERSION`。
-  - 不接入 Suunto-Agent 的 Jenkins / release.py 整栈发布；回滚在 APIM 关闭 Langfuse 通道，设备无需发版。
+  - 不接入云端业务的整栈发布流水线；回滚在 APIM 关闭 Langfuse 通道，设备无需发版。
 
 - **检查与交付**
 
   - 改动后运行 `bash probes/local-smoke.sh`；涉及 Collector 配置时用 M2 镜像执行 `validate --config=/etc/otelcol-contrib/config.yaml`。
   - 真实实例验收按方案 M0 与第 07 节执行；本地通过不等于生产验收，如实报告未验证项。
-  - 权威方案（本机路径）：`D:\8004\Desktop\AIGC\Koog改造LF\00_2026-11-24_最终交付方案\index.html`，物料在其 `materials/`。
+  - 权威方案：《Langfuse 接入 · 最终交付方案》（2026-11-24）；本机路径与物料位置见 LOCAL.md（已 gitignore，不入库）。

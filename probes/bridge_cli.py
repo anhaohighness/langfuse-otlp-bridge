@@ -42,7 +42,7 @@ import urllib.parse
 DEFAULT_URL = os.environ.get("BRIDGE_TRACES_URL", "http://localhost:4318/v1/traces")
 SERVICE = "bridge-cli"
 SESSION = "cli-session"
-TAGS = ["suunto-ai-sdk", "jvm"]
+TAGS = ["otlp-sample", "jvm"]
 SCENARIOS = ("turn", "cancelled", "failure", "memory", "all")
 
 
@@ -105,7 +105,7 @@ def request_proto(traces: list[dict]) -> bytes:
     out = b""
     for tr in traces:
         resource = _ld(1, b"".join(_ld(1, _kv(k, v)) for k, v in tr["resource"]))
-        scope = _ld(1, _ld(1, b"com.suunto.ai.bridge-cli"))
+        scope = _ld(1, _ld(1, b"dev.otlp.bridge.cli"))
         spans = b"".join(_ld(2, _span_proto(sp)) for sp in tr["spans"])
         out += _ld(1, resource + _ld(2, scope + spans))
     return out
@@ -143,7 +143,7 @@ def request_json(traces: list[dict]) -> bytes:
             spans.append(j)
         rs.append({
             "resource": {"attributes": [{"key": k, "value": _any_json(v)} for k, v in tr["resource"]]},
-            "scopeSpans": [{"scope": {"name": "com.suunto.ai.bridge-cli"}, "spans": spans}],
+            "scopeSpans": [{"scope": {"name": "dev.otlp.bridge.cli"}, "spans": spans}],
         })
     return json.dumps({"resourceSpans": rs}, ensure_ascii=False).encode()
 

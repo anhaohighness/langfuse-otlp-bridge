@@ -25,7 +25,7 @@
 #   3. chat_turn 上没有 gen_ai.usage.*，metadata 里有 turn_total_input_tokens=30
 #      等三项（R4）；trace 总 token = 30 / 6，不是 60 / 12。
 #   4. memory.extract 的用量保留（12 / 3）：R4 不能误删非 turn_total 的根。
-#   5. trace 标签含 suunto-ai-sdk 与 jvm（R3）；coach.run 的 metadata 有 loop_exit，
+#   5. trace 标签含 otlp-sample 与 jvm（R3）；coach.run 的 metadata 有 loop_exit，
 #      generation 的 metadata 有 request_phase（R6）。
 #   6. 两条 trace 的 session 相同：probe-session。
 
@@ -45,7 +45,7 @@ s() { printf '{"key":"%s","value":{"stringValue":"%s"}}' "$1" "$2"; }
 i() { printf '{"key":"%s","value":{"intValue":"%s"}}' "$1" "$2"; }
 
 COMMON="$(s session.id probe-session),$(s user.id probe-user),$(s gen_ai.conversation.id probe-session),\
-{\"key\":\"suunto.trace.tags\",\"value\":{\"arrayValue\":{\"values\":[{\"stringValue\":\"suunto-ai-sdk\"},{\"stringValue\":\"jvm\"}]}}}"
+{\"key\":\"suunto.trace.tags\",\"value\":{\"arrayValue\":{\"values\":[{\"stringValue\":\"otlp-sample\"},{\"stringValue\":\"jvm\"}]}}}"
 
 span() { # id parent name start_ms end_ms attrs
   local parent=""
@@ -58,7 +58,7 @@ payload() {
   local spans="$1"
   cat <<JSON
 {"resourceSpans":[{"resource":{"attributes":[$(s service.name otlp-probe),$(s service.version 0.0.0-probe),$(s deployment.environment.name probe)]},
-"scopeSpans":[{"scope":{"name":"com.suunto.ai.probe"},"spans":[${spans}]}]}]}
+"scopeSpans":[{"scope":{"name":"dev.otlp.bridge.probe"},"spans":[${spans}]}]}]}
 JSON
 }
 
