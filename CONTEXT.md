@@ -32,7 +32,7 @@
 
 ## 待办（按优先级）
 
-1. ~~首次 git commit + 创建远端仓库~~ 已完成：main 三次提交（初始物料 / .gitattributes / M1 兼容+调试 CLI），远端 github.com/anhaohighness/suunto-langfuse-bridge（public，2026-11-25 用本地 credential store 凭据推送；改公开前已扫描确认无真实密钥）。
+1. ~~首次 git commit + 创建远端仓库~~ 已完成：main 三次提交（初始物料 / .gitattributes / M1 兼容+调试 CLI），远端 github.com/anhaohighness/langfuse-otlp-bridge（public，仓库名不带 Suunto 字样，2026-11-25 用户要求；本地目录与镜像名仍为 suunto-langfuse-bridge）。
 2. `cp m1/bridge.env.example .env` 填 dev 区域端点与密钥 → M0：探针写入真实实例一条 trace，记录实例版本与 ingestion v4 支持。
 3. 基础镜像钉版本（当前 `python:3.13-slim` / `otelcol-contrib:latest` 为浮动标签）。
 4. APIM 新增 Langfuse 通道（不在本仓库）；跟进 D1/D4 拍板。
