@@ -1,9 +1,9 @@
 # Langfuse 桥接层参考配置（OpenTelemetry Collector contrib 发行版）
 #
 # 版本：2026-11-24，取代 02_2026-11-11_… 与 06_2026-11-18_… 中的草稿。
-# 状态：参考配置。语句按 transform processor 的 context/statements 写法编写，
-#       未在目标发行版上执行过。上线前先在 dev 区域用 probes/otlp-probe.sh
-#       和一条真实回合各跑一次，再按最终交付方案 index.html 第 07 节验收。
+# 状态：语法已用 M2 镜像内真实 otelcol-contrib 二进制 validate 校验（2026-11-24）；
+#       OTTL 运行时改写效果与目标实例渲染尚未验证。上线前先在 dev 区域用
+#       probes/otlp-probe.sh 和一条真实回合各跑一次，再按最终交付方案 index.html 第 07 节验收。
 #
 # 相对旧稿的修正：
 #   1. R4 只作用于 suunto.usage.scope == "turn_total" 的 span。旧稿按“所有根 span”
@@ -60,6 +60,8 @@ processors:
           # 只处理整轮汇总（turn_total）。先把数值搬进可筛选 metadata，再删除标准用量键，
           # token 与成本只以请求级 generation 为准。未实现 D1 时不要启用这一组语句，
           # 否则整轮 token 会完全消失。
+          # SDK 样例导出器（REPL/Android/iOS sample）已实现该接口，dev 直连链路可启用；
+          # 生产宿主（STTAndroid/STTiOS）接线仍待 D1 拍板，届时逐环境确认。
           - set(attributes["langfuse.observation.metadata.turn_total_input_tokens"], attributes["gen_ai.usage.input_tokens"]) where attributes["suunto.usage.scope"] == "turn_total" and attributes["gen_ai.usage.input_tokens"] != nil
           - set(attributes["langfuse.observation.metadata.turn_total_output_tokens"], attributes["gen_ai.usage.output_tokens"]) where attributes["suunto.usage.scope"] == "turn_total" and attributes["gen_ai.usage.output_tokens"] != nil
           - set(attributes["langfuse.observation.metadata.turn_total_cached_input_tokens"], attributes["gen_ai.usage.cache_read.input_tokens"]) where attributes["suunto.usage.scope"] == "turn_total" and attributes["gen_ai.usage.cache_read.input_tokens"] != nil

@@ -28,6 +28,10 @@ M2 起换 OpenTelemetry Collector（config/collector-langfuse.yaml）做 R1/R4 �
     - 429/5xx/超时：有界重试，耗尽后向调用方返回 502 并计数。
     - 400/401/403/413：不重试，记录状态与字节数并原样回传状态码。
     - 入站鉴权失败 401；路径不符 404；空体 400；超 20 MiB 413。
+
+入站兼容（对齐 SDK RegionalTraceConfig 端点契约）：
+    - 路径允许携带查询串（SDK 端点契约允许 ?query），按去查询后的路径匹配。
+    - 请求体支持 Content-Length 与 chunked 两种传输编码（网关转发可能用 chunked）。
 """
 
 from __future__ import annotations
@@ -126,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
     stats: Stats
 
     def do_GET(self) -> None:  # noqa: N802（http.server 约定）
-        if self.path == "/healthz":
+        if self.path.split("?", 1)[0] == "/healthz":
             payload = json.dumps({"status": "ok", **self.stats.snapshot()}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -137,7 +141,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/v1/traces":
+        if self.path.split("?", 1)[0] != "/v1/traces":
             self.send_error(404)
             return
         self.stats.bump("received")
@@ -148,19 +152,31 @@ class Handler(BaseHTTPRequestHandler):
                 LOG.warning("inbound auth rejected bytes=%s", self.headers.get("Content-Length", "?"))
                 self.send_error(401)
                 return
+        chunked = "chunked" in (self.headers.get("Transfer-Encoding") or "").lower()
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = -1
-        if length <= 0:
-            self.stats.bump("rejected")
-            self.send_error(400)
-            return
-        if length > MAX_BODY_BYTES:
-            self.stats.bump("rejected")
-            self.send_error(413)
-            return
-        body = self.rfile.read(length)
+        if chunked:
+            body = self.read_chunked()
+            if body is None:
+                self.stats.bump("rejected")
+                self.send_error(400)
+                return
+            if len(body) > MAX_BODY_BYTES:
+                self.stats.bump("rejected")
+                self.send_error(413)
+                return
+        else:
+            if length <= 0:
+                self.stats.bump("rejected")
+                self.send_error(400)
+                return
+            if length > MAX_BODY_BYTES:
+                self.stats.bump("rejected")
+                self.send_error(413)
+                return
+            body = self.rfile.read(length)
         content_type = self.headers.get("Content-Type", "application/x-protobuf")
         status, detail = forward(self.cfg, body, content_type, self.headers.get("Content-Encoding"))
         if 200 <= status < 300:
@@ -174,8 +190,30 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(resp_body)
         else:
             self.stats.bump("failed")
-            LOG.warning("forward failed status=%s bytes=%d detail=%s", status, length, detail)
+            LOG.warning("forward failed status=%s bytes=%d detail=%s", status, len(body), detail)
             self.send_error(status if 400 <= status < 600 else 502)
+
+    def read_chunked(self) -> bytes | None:
+        """读 chunked 请求体；None 表示编码非法。至多多读 1 字节超限，由调用方判 413。"""
+        body = bytearray()
+        while len(body) <= MAX_BODY_BYTES:
+            line = self.rfile.readline(65536)
+            try:
+                size = int(line.split(b";", 1)[0].strip(), 16)
+            except ValueError:
+                return None
+            if size < 0:
+                return None
+            if size == 0:
+                while True:  # 忽略 trailer，读到空行为止
+                    if self.rfile.readline(65536) in (b"\r\n", b"\n", b""):
+                        break
+                return bytes(body)
+            room = MAX_BODY_BYTES + 1 - len(body)
+            body += self.rfile.read(min(size, room))
+            if size <= room:
+                self.rfile.read(2)  # chunk 尾部 CRLF
+        return bytes(body)
 
     def log_message(self, fmt: str, *args: object) -> None:
         # 只记录请求行与状态码，不打印载荷。
